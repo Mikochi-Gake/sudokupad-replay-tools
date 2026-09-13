@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.npm-cache/
+coverage/
+*.replay
+!test/fixtures/*.replay
+*.progress
+*.zip
+private-fixtures/
+replay-output/
+*.log
+.env
+.env.*
+!.env.example

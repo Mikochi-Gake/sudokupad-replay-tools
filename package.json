@@ -1,0 +1,29 @@
+{
+  "name": "sudokupad-replay-tools",
+  "version": "0.1.0",
+  "description": "Unofficial local parser, CLI, and MCP server for SudokuPad replay_v1.0 files",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "sudokupad-replay": "dist/src/cli.js",
+    "sudokupad-replay-mcp": "dist/src/mcp.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/*.test.js",
+    "check": "npm run build && npm test",
+    "start:mcp": "node dist/src/mcp.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "7.0.2"
+  }
+}
