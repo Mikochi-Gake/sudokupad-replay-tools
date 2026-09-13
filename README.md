@@ -100,6 +100,10 @@ npm test
 
 Project code is licensed under the MIT License. The bounded LZ-String-compatible decompressor in `src/lz-string-compat.ts` is adapted from LZ-String; see `THIRD_PARTY_NOTICES.md`.
 
+## Acknowledgements
+
+Initial implementation was designed and written with OpenAI Codex using GPT-5.6 Sol, under the project owner's direction and review.
+
 ## 中文速览
 
 这是一个非官方、本地运行的 SudokuPad `.replay` 解析工具。命令行适合直接检查，MCP 适合让模型按需查询。底层仍保留全部动作；默认查询只隐藏纯选格/取消选格，随时可以用 `includeSelection` 或 `--include-selection` 取回。真实回放不会自动上传，也不会作为测试样例提交到 Git。
