@@ -113,7 +113,15 @@ export async function readReplayContainer(filePath: string): Promise<ParsedConta
   const puzzleId = requireString(rawReplay.puzzleId, 'replay.puzzleId');
   const replayData = requireString(rawReplay.data, 'replay.data');
 
-  const puzzleText = decompressFromBase64Bounded(puzzleEncoded.slice(4), LIMITS.maxPuzzleChars);
+  let puzzlePayload: string;
+  try {
+    puzzlePayload = decodeURIComponent(puzzleEncoded.slice(4));
+  } catch (error) {
+    throw new ReplayError('INVALID_PUZZLE', 'Embedded puzzle contains invalid URL encoding.', {
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
+  const puzzleText = decompressFromBase64Bounded(puzzlePayload, LIMITS.maxPuzzleChars);
   let unknownPuzzle: unknown;
   try {
     unknownPuzzle = JSON.parse(puzzleText);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -44,6 +44,29 @@ test('warns rather than failing when a solution is absent', async () => {
   const result = await parseReplayFile(noSolutionFixture);
   assert.equal(result.solution, undefined);
   assert.ok(result.warnings.some(warning => warning.code === 'MISSING_SOLUTION'));
+});
+
+test('decodes URL-encoded fpuz payloads exported inside replay files', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sudokupad-replay-urlencoded-'));
+  const container = JSON.parse(await readFile(basicFixture, 'utf8')) as { puzzle: string };
+  container.puzzle = `fpuz${encodeURIComponent(container.puzzle.slice(4))}`;
+  const encodedFixture = join(directory, 'url-encoded.replay');
+  await writeFile(encodedFixture, JSON.stringify(container), 'utf8');
+  const result = await parseReplayFile(encodedFixture);
+  assert.equal(result.actions.length, 15);
+  assert.equal(result.finalState.r1c3.value, '3');
+});
+
+test('rejects malformed URL encoding in fpuz payloads', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sudokupad-replay-invalid-url-'));
+  const container = JSON.parse(await readFile(basicFixture, 'utf8')) as { puzzle: string };
+  container.puzzle = 'fpuz%';
+  const invalidFixture = join(directory, 'invalid-url.replay');
+  await writeFile(invalidFixture, JSON.stringify(container), 'utf8');
+  await assert.rejects(
+    () => parseReplayFile(invalidFixture),
+    (error: unknown) => error instanceof ReplayError && error.code === 'INVALID_PUZZLE',
+  );
 });
 
 test('unknown action codes fail explicitly and preserve diagnostics', () => {
