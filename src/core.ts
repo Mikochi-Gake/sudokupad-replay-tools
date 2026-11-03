@@ -1,10 +1,9 @@
 import { decodeActions } from './actions.js';
-import { readReplayContainer } from './container.js';
+import { parseReplayContainerText, readReplayContainer, type ParsedContainer } from './container.js';
 import { cellName, ReplayEngine } from './engine.js';
 import type { EventFilters, ReplayAnalysis, ReplayEvent } from './types.js';
 
-export async function parseReplayFile(filePath: string, stopAtAction?: number): Promise<ReplayAnalysis> {
-  const parsed = await readReplayContainer(filePath);
+function replayParsedContainer(parsed: ParsedContainer, stopAtAction?: number): ReplayAnalysis {
   const actions = decodeActions(parsed.actionStream, parsed.metadata.rows, parsed.metadata.cols, parsed.metadata.appVersion);
   const engine = new ReplayEngine(parsed.puzzle, parsed.metadata.rows, parsed.metadata.cols);
   const limit = stopAtAction === undefined ? actions.length : Math.max(0, Math.min(actions.length, stopAtAction));
@@ -35,6 +34,14 @@ export async function parseReplayFile(filePath: string, stopAtAction?: number): 
     counts,
     reliableThroughAction: limit,
   };
+}
+
+export async function parseReplayFile(filePath: string, stopAtAction?: number): Promise<ReplayAnalysis> {
+  return replayParsedContainer(await readReplayContainer(filePath), stopAtAction);
+}
+
+export function parseReplayText(text: string, stopAtAction?: number): ReplayAnalysis {
+  return replayParsedContainer(parseReplayContainerText(text), stopAtAction);
 }
 
 const PURE_SELECTION = new Set(['hl', 'sl', 'ds']);

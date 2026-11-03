@@ -25,6 +25,10 @@ export interface ParsedContainer {
   actionStream: string;
 }
 
+function utf8ByteLength(text: string): number {
+  return Buffer.byteLength(text, 'utf8');
+}
+
 function assertJsonDepth(root: unknown, maxDepth: number): void {
   const pending: Array<{ value: unknown; depth: number }> = [{ value: root, depth: 0 }];
   while (pending.length > 0) {
@@ -57,29 +61,34 @@ function requireDimension(value: unknown, label: string, max: number): number {
   return Number(value);
 }
 
-export async function readReplayContainer(filePath: string): Promise<ParsedContainer> {
-  if (typeof filePath !== 'string' || filePath.trim() === '') {
-    throw new ReplayError('FILE_NOT_FOUND', 'A local replay file path is required.');
+function normalizeSclPuzzle(puzzle: Record<string, unknown>): Record<string, unknown> {
+  const cells = puzzle.cells;
+  if (!Array.isArray(cells)) {
+    throw new ReplayError('INVALID_PUZZLE', 'Embedded scl puzzle is missing its cell grid.');
   }
-  const absolutePath = resolve(filePath);
-  let fileStat;
-  try {
-    fileStat = await stat(absolutePath);
-  } catch (error) {
-    throw new ReplayError('FILE_NOT_FOUND', 'Replay file was not found.', {
-      path: absolutePath,
-      cause: error instanceof Error ? error.message : String(error),
+  const grid = cells.map((row: unknown) => {
+    if (!Array.isArray(row)) {
+      throw new ReplayError('INVALID_PUZZLE', 'Embedded scl grid row must be an array.');
+    }
+    return row.map((entry: unknown) => {
+      const { value } = requireObject(entry, 'Embedded scl cell');
+      return typeof value === 'string' || typeof value === 'number'
+        ? { given: true, value }
+        : {};
     });
-  }
-  if (!fileStat.isFile()) throw new ReplayError('NOT_A_FILE', 'Replay path is not a regular file.');
-  if (fileStat.size > LIMITS.maxFileBytes) {
+  });
+  const metadata = requireObject(puzzle.metadata ?? puzzle.metaData ?? {}, 'Embedded scl metadata');
+  return { ...metadata, grid };
+}
+
+export function parseReplayContainerText(text: string): ParsedContainer {
+  const bytes = utf8ByteLength(text);
+  if (bytes > LIMITS.maxFileBytes) {
     throw new ReplayError('FILE_TOO_LARGE', 'Replay file exceeds the configured size limit.', {
-      bytes: fileStat.size,
+      bytes,
       maxBytes: LIMITS.maxFileBytes,
     });
   }
-
-  const text = await readFile(absolutePath, 'utf8');
   let unknownContainer: unknown;
   try {
     unknownContainer = JSON.parse(text);
@@ -96,8 +105,14 @@ export async function readReplayContainer(filePath: string): Promise<ParsedConta
     throw new ReplayError('UNSUPPORTED_FORMAT', 'Unsupported replay container format.', { format });
   }
   const puzzleEncoded = requireString(outer.puzzle, 'puzzle');
-  if (!puzzleEncoded.startsWith('fpuz')) {
-    throw new ReplayError('INVALID_PUZZLE', 'Embedded puzzle does not use the expected fpuz encoding.');
+  const prefix = ['fpuz', 'scl'].find(candidate => puzzleEncoded.startsWith(candidate));
+  if (prefix === undefined) {
+    const encoding = puzzleEncoded.slice(0, 4).replace(/[^a-z0-9]/gi, '') || 'unknown';
+    throw new ReplayError(
+      'UNSUPPORTED_PUZZLE_ENCODING',
+      'This replay uses an embedded puzzle encoding that is not supported yet.',
+      { encoding },
+    );
   }
   const rawReplay = requireObject(outer.replay, 'replay');
   const compression = requireString(rawReplay.type, 'replay.type');
@@ -115,7 +130,7 @@ export async function readReplayContainer(filePath: string): Promise<ParsedConta
 
   let puzzlePayload: string;
   try {
-    puzzlePayload = decodeURIComponent(puzzleEncoded.slice(4));
+    puzzlePayload = decodeURIComponent(puzzleEncoded.slice(prefix.length));
   } catch (error) {
     throw new ReplayError('INVALID_PUZZLE', 'Embedded puzzle contains invalid URL encoding.', {
       cause: error instanceof Error ? error.message : String(error),
@@ -131,7 +146,8 @@ export async function readReplayContainer(filePath: string): Promise<ParsedConta
     });
   }
   assertJsonDepth(unknownPuzzle, LIMITS.maxJsonDepth);
-  const puzzle = requireObject(unknownPuzzle, 'Embedded puzzle');
+  const decodedPuzzle = requireObject(unknownPuzzle, 'Embedded puzzle');
+  const puzzle = prefix === 'scl' ? normalizeSclPuzzle(decodedPuzzle) : decodedPuzzle;
   const actionStream = decompressFromBase64Bounded(replayData, LIMITS.maxActionStreamChars);
 
   const warnings: ReplayWarning[] = [];
@@ -158,4 +174,28 @@ export async function readReplayContainer(filePath: string): Promise<ParsedConta
   };
 
   return { metadata, warnings, puzzle, actionStream };
+}
+
+export async function readReplayContainer(filePath: string): Promise<ParsedContainer> {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    throw new ReplayError('FILE_NOT_FOUND', 'A local replay file path is required.');
+  }
+  const absolutePath = resolve(filePath);
+  let fileStat;
+  try {
+    fileStat = await stat(absolutePath);
+  } catch (error) {
+    throw new ReplayError('FILE_NOT_FOUND', 'Replay file was not found.', {
+      path: absolutePath,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
+  if (!fileStat.isFile()) throw new ReplayError('NOT_A_FILE', 'Replay path is not a regular file.');
+  if (fileStat.size > LIMITS.maxFileBytes) {
+    throw new ReplayError('FILE_TOO_LARGE', 'Replay file exceeds the configured size limit.', {
+      bytes: fileStat.size,
+      maxBytes: LIMITS.maxFileBytes,
+    });
+  }
+  return parseReplayContainerText(await readFile(absolutePath, 'utf8'));
 }

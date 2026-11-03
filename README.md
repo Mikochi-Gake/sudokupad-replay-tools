@@ -1,6 +1,6 @@
 # sudokupad-replay-tools
 
-An unofficial, local-only parser for SudokuPad `.replay` files, with a small command-line interface and a read-only MCP server.
+An unofficial, local-only parser for SudokuPad `.replay` files, with a drag-and-drop review desk, a small command-line interface, and a read-only MCP server.
 
 It turns SudokuPad's compact `replay_v1.0` + `clzw` action stream into deterministic events: timestamps, selected cells, before/after cell state, solution mismatches, and undo/redo links. Pure selection events are hidden from normal queries unless requested, so an agent does not have to ingest hundreds of low-value clicks.
 
@@ -15,7 +15,28 @@ It turns SudokuPad's compact `replay_v1.0` + `clzw` action stream into determini
 - Reconstructs the complete grid after an action or at a replay time.
 - Compares entered values with the embedded solution when one exists.
 
-It intentionally does **not** provide a web UI, visual player, AI inference, performance metrics, or `.progress`/zip import in v0.1.0.
+It intentionally does **not** provide a replay player, hosted service, AI inference, technique grading, or `.progress`/zip import in v0.1.0. The review desk reports deterministic timing clues; it does not claim to know what the solver was thinking.
+
+## Local review desk
+
+On Windows, double-click `start-ui.cmd`. It builds the project, opens the review desk in your browser, and keeps all processing on this computer. Close the command window to stop it.
+
+You can also start it from a terminal:
+
+```sh
+npm run ui
+```
+
+Drop a `.replay` file onto the page and choose one of four views:
+
+- **Errors and rollbacks** separates original wrong entries from states restored by undo/redo.
+- **Quick check** shows puzzle metadata, duration, action count, warnings, and final correctness.
+- **Speed clues** shows long gaps between meaningful state changes, candidate/value activity, and selection share.
+- **Export for Chat** downloads a compact `.review.json` without pure selection events.
+
+The server binds only to `127.0.0.1`, makes no remote requests, accepts uploaded file bytes rather than arbitrary server-side paths, and processes them in memory. The existing 8 MiB file limit and decompression limits still apply.
+
+SCL/Penpa embedded puzzle encoding is not supported yet. The page identifies that limitation explicitly instead of pretending it can reconstruct the grid.
 
 ## Requirements and setup
 
